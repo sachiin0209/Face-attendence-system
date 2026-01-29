@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Setup - Face Authentication</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-face-smile"></i>
+            <span>FaceAuth Attendance</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/"><i class="fas fa-home"></i> Home</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h1><i class="fas fa-user-shield"></i> First Admin Setup</h1>
+            <p>Register the first super admin to initialize the system</p>
+        </section>
+
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <span>This is the first admin setup. The first registered admin will have super admin privileges.</span>
+        </div>
+
+        <div class="registration-container">
+            <div class="form-section">
+                <h2>Admin Details</h2>
+                <form id="admin-form">
+                    <div class="form-group">
+                        <label for="admin_id">
+                            <i class="fas fa-id-badge"></i> Admin ID *
+                        </label>
+                        <input type="text" id="admin_id" name="admin_id" required 
+                               placeholder="e.g., ADMIN001">
+                    </div>
+                    <div class="form-group">
+                        <label for="name">
+                            <i class="fas fa-user"></i> Full Name *
+                        </label>
+                        <input type="text" id="name" name="name" required 
+                               placeholder="e.g., John Admin">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">
+                            <i class="fas fa-envelope"></i> Email *
+                        </label>
+                        <input type="email" id="email" name="email" required 
+                               placeholder="e.g., admin@example.com">
+                    </div>
+                </form>
+            </div>
+
+            <div class="camera-section">
+                <h2>Face Capture</h2>
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <div class="face-overlay" id="face-overlay"></div>
+                </div>
+                
+                <div class="camera-controls">
+                    <button type="button" id="start-camera" class="btn btn-primary">
+                        <i class="fas fa-video"></i> Start Camera
+                    </button>
+                    <button type="button" id="capture-btn" class="btn btn-secondary" disabled>
+                        <i class="fas fa-camera"></i> Capture (<span id="capture-count">0</span>/5)
+                    </button>
+                    <button type="button" id="clear-btn" class="btn btn-danger" disabled>
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                </div>
+
+                <div class="captured-images" id="captured-images"></div>
+
+                <div class="instructions">
+                    <h3><i class="fas fa-info-circle"></i> Instructions</h3>
+                    <ul>
+                        <li>Capture at least 3 images (5 recommended)</li>
+                        <li>Look directly at the camera</li>
+                        <li>Ensure good lighting on your face</li>
+                        <li>Try slightly different angles</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-section">
+            <button type="button" id="register-btn" class="btn btn-success btn-large" disabled>
+                <i class="fas fa-check"></i> Complete Admin Setup
+            </button>
+        </div>
+
+        <!-- Message Modal -->
+        <div id="message-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <div id="modal-icon"></div>
+                <h2 id="modal-title"></h2>
+                <p id="modal-message"></p>
+                <button class="btn btn-primary" onclick="closeModal()">OK</button>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Face Authentication Attendance System</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+    <script>
+        let capturedImages = [];
+        const maxImages = 5;
+        const minImages = 3;
+
+        document.getElementById('start-camera').addEventListener('click', async () => {
+            const started = await startCamera('video');
+            if (started) {
+                document.getElementById('start-camera').disabled = true;
+                document.getElementById('capture-btn').disabled = false;
+            }
+        });
+
+        document.getElementById('capture-btn').addEventListener('click', () => {
+            if (capturedImages.length >= maxImages) return;
+            
+            const imageData = captureFrame('video', 'canvas');
+            if (imageData) {
+                capturedImages.push(imageData);
+                updateCapturedImages();
+                updateButtons();
+            }
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            capturedImages = [];
+            updateCapturedImages();
+            updateButtons();
+        });
+
+        document.getElementById('register-btn').addEventListener('click', async () => {
+            const adminId = document.getElementById('admin_id').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+
+            if (!adminId || !name || !email) {
+                showModal('error', 'Missing Information', 'Please fill in all required fields.');
+                return;
+            }
+
+            if (capturedImages.length < minImages) {
+                showModal('error', 'Not Enough Images', `Please capture at least ${minImages} images.`);
+                return;
+            }
+
+            document.getElementById('register-btn').disabled = true;
+            document.getElementById('register-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            try {
+                const response = await fetch('/api/admin/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_id: adminId,
+                        name: name,
+                        email: email,
+                        role: 'super_admin',
+                        images: capturedImages
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showModal('success', 'Admin Registered!', 
+                        `${name} has been registered as Super Admin. Redirecting to admin panel...`);
+                    setTimeout(() => {
+                        window.location.href = '/admin';
+                    }, 2000);
+                } else {
+                    showModal('error', 'Registration Failed', data.message);
+                    document.getElementById('register-btn').disabled = false;
+                    document.getElementById('register-btn').innerHTML = '<i class="fas fa-check"></i> Complete Admin Setup';
+                }
+            } catch (error) {
+                showModal('error', 'Error', 'Failed to connect to server.');
+                document.getElementById('register-btn').disabled = false;
+                document.getElementById('register-btn').innerHTML = '<i class="fas fa-check"></i> Complete Admin Setup';
+            }
+        });
+
+        function updateCapturedImages() {
+            const container = document.getElementById('captured-images');
+            container.innerHTML = capturedImages.map((img, i) => `
+                <div class="captured-image">
+                    <img src="${img}" alt="Capture ${i + 1}">
+                    <span class="image-number">${i + 1}</span>
+                </div>
+            `).join('');
+            document.getElementById('capture-count').textContent = capturedImages.length;
+        }
+
+        function updateButtons() {
+            document.getElementById('clear-btn').disabled = capturedImages.length === 0;
+            document.getElementById('capture-btn').disabled = capturedImages.length >= maxImages;
+            document.getElementById('register-btn').disabled = capturedImages.length < minImages;
+        }
+
+        function showModal(type, title, message) {
+            const modal = document.getElementById('message-modal');
+            const icon = document.getElementById('modal-icon');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            
+            icon.innerHTML = type === 'success' 
+                ? '<i class="fas fa-check-circle" style="color: #28a745; font-size: 48px;"></i>'
+                : '<i class="fas fa-times-circle" style="color: #dc3545; font-size: 48px;"></i>';
+            
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('message-modal').style.display = 'none';
+        }
+
+        document.querySelector('.close-modal').addEventListener('click', closeModal);
+    </script>
+</body>
+</html>

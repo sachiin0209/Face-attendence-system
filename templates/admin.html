@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Face Authentication</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-face-smile"></i>
+            <span>FaceAuth Attendance</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="/register"><i class="fas fa-user-plus"></i> Register</a></li>
+            <li><a href="/attendance"><i class="fas fa-clock"></i> Attendance</a></li>
+            <li><a href="/dashboard"><i class="fas fa-chart-bar"></i> Dashboard</a></li>
+            <li><a href="/admin" class="active"><i class="fas fa-shield-halved"></i> Admin</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h1><i class="fas fa-shield-halved"></i> Admin Panel</h1>
+            <p>Manage admins and authorize user registrations</p>
+        </section>
+
+        <!-- Admin Session Status -->
+        <div id="session-status" class="session-bar hidden">
+            <div class="session-info">
+                <i class="fas fa-user-shield"></i>
+                <span>Logged in as: <strong id="admin-name">-</strong></span>
+                <span class="session-timer">Session expires in: <strong id="session-timer">-</strong></span>
+            </div>
+            <button id="logout-btn" class="btn btn-sm btn-danger">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+
+        <!-- Not Authenticated View -->
+        <div id="auth-section">
+            <div class="auth-card">
+                <h2><i class="fas fa-lock"></i> Admin Authentication Required</h2>
+                <p>Please scan your face to access the admin panel</p>
+                
+                <div class="camera-container medium">
+                    <video id="auth-video" autoplay playsinline></video>
+                    <canvas id="auth-canvas" style="display: none;"></canvas>
+                    <div class="face-overlay"></div>
+                </div>
+                
+                <div class="camera-controls">
+                    <button id="start-auth-camera" class="btn btn-primary">
+                        <i class="fas fa-video"></i> Start Camera
+                    </button>
+                    <button id="authenticate-btn" class="btn btn-success" disabled>
+                        <i class="fas fa-fingerprint"></i> Authenticate
+                    </button>
+                </div>
+
+                <div id="auth-message" class="auth-message"></div>
+            </div>
+        </div>
+
+        <!-- Authenticated Admin View -->
+        <div id="admin-panel" class="hidden">
+            <div class="admin-tabs">
+                <button class="tab-btn active" data-tab="users">
+                    <i class="fas fa-users"></i> Registered Users
+                </button>
+                <button class="tab-btn" data-tab="admins">
+                    <i class="fas fa-user-shield"></i> Admins
+                </button>
+                <button class="tab-btn" data-tab="activity">
+                    <i class="fas fa-history"></i> Activity Log
+                </button>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="users-tab" class="tab-content active">
+                <div class="tab-header">
+                    <h3>Registered Users</h3>
+                    <a href="/register" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Add New User
+                    </a>
+                </div>
+                <div class="table-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Registered By</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody">
+                            <tr><td colspan="7" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admins Tab -->
+            <div id="admins-tab" class="tab-content">
+                <div class="tab-header">
+                    <h3>Admin Users</h3>
+                    <button id="add-admin-btn" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Add New Admin
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="admins-table">
+                        <thead>
+                            <tr>
+                                <th>Admin ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admins-tbody">
+                            <tr><td colspan="6" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Activity Log Tab -->
+            <div id="activity-tab" class="tab-content">
+                <div class="tab-header">
+                    <h3>Activity Log</h3>
+                </div>
+                <div class="table-container">
+                    <table id="activity-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Admin</th>
+                                <th>Action</th>
+                                <th>Target</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-tbody">
+                            <tr><td colspan="5" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Modal -->
+        <div id="message-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <div id="modal-icon"></div>
+                <h2 id="modal-title"></h2>
+                <p id="modal-message"></p>
+                <button class="btn btn-primary" onclick="closeModal()">OK</button>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Face Authentication Attendance System</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

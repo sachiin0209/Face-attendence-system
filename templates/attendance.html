@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance - Face Authentication</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-face-smile"></i>
+            <span>FaceAuth Attendance</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="/register"><i class="fas fa-user-plus"></i> Register</a></li>
+            <li><a href="/attendance" class="active"><i class="fas fa-clock"></i> Attendance</a></li>
+            <li><a href="/dashboard"><i class="fas fa-chart-bar"></i> Dashboard</a></li>
+            <li><a href="/admin"><i class="fas fa-shield-halved"></i> Admin</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h1><i class="fas fa-clock"></i> Mark Attendance</h1>
+            <p>Use face recognition to punch in or punch out</p>
+        </section>
+
+        <div class="attendance-container">
+            <div class="camera-section attendance-camera">
+                <div class="camera-container large">
+                    <video id="attendance-video" autoplay playsinline></video>
+                    <canvas id="attendance-canvas" style="display: none;"></canvas>
+                    <div class="face-overlay" id="face-overlay"></div>
+                    <div class="scanning-indicator hidden" id="scanning-indicator">
+                        <div class="scanning-line"></div>
+                    </div>
+                </div>
+                
+                <div class="camera-controls">
+                    <button type="button" id="start-camera" class="btn btn-primary">
+                        <i class="fas fa-video"></i> Start Camera
+                    </button>
+                </div>
+
+                <div class="attendance-buttons">
+                    <button type="button" id="punch-in-btn" class="btn btn-success btn-large" disabled>
+                        <i class="fas fa-sign-in-alt"></i> Punch In
+                    </button>
+                    <button type="button" id="punch-out-btn" class="btn btn-warning btn-large" disabled>
+                        <i class="fas fa-sign-out-alt"></i> Punch Out
+                    </button>
+                </div>
+            </div>
+
+            <div class="result-section">
+                <div class="current-time">
+                    <i class="fas fa-clock"></i>
+                    <span id="current-time">--:--:--</span>
+                    <span id="current-date">----/--/--</span>
+                </div>
+
+                <div id="result-card" class="result-card hidden">
+                    <div class="result-icon" id="result-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2 id="result-title">Success</h2>
+                    <div class="result-details">
+                        <p><strong>Name:</strong> <span id="result-name">-</span></p>
+                        <p><strong>Employee ID:</strong> <span id="result-employee-id">-</span></p>
+                        <p><strong>Department:</strong> <span id="result-department">-</span></p>
+                        <p><strong>Time:</strong> <span id="result-time">-</span></p>
+                        <p><strong>Confidence:</strong> <span id="result-confidence">-</span></p>
+                        <p id="hours-worked-row" style="display: none;">
+                            <strong>Hours Worked:</strong> <span id="result-hours">-</span>
+                        </p>
+                    </div>
+                    <p id="result-message" class="result-message"></p>
+                </div>
+
+                <div class="instructions attendance-instructions">
+                    <h3><i class="fas fa-info-circle"></i> Instructions</h3>
+                    <ul>
+                        <li>Position your face in the camera frame</li>
+                        <li>Ensure good lighting on your face</li>
+                        <li>Click "Punch In" when arriving</li>
+                        <li>Click "Punch Out" when leaving</li>
+                        <li>Wait for face recognition confirmation</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p id="loading-text">Processing...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Face Authentication Attendance System</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
+</body>
+</html>

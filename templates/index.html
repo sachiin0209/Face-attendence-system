@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Authentication Attendance System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-face-smile"></i>
+            <span>FaceAuth Attendance</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/" class="active"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="/register"><i class="fas fa-user-plus"></i> Register</a></li>
+            <li><a href="/attendance"><i class="fas fa-clock"></i> Attendance</a></li>
+            <li><a href="/dashboard"><i class="fas fa-chart-bar"></i> Dashboard</a></li>
+            <li><a href="/admin"><i class="fas fa-shield-halved"></i> Admin</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Face Authentication Attendance System</h1>
+                <p>Secure, contactless attendance tracking using advanced face recognition with admin authorization</p>
+                <div class="hero-buttons">
+                    <a href="/admin" class="btn btn-primary">
+                        <i class="fas fa-shield-halved"></i> Admin Panel
+                    </a>
+                    <a href="/attendance" class="btn btn-success">
+                        <i class="fas fa-clock"></i> Mark Attendance
+                    </a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <i class="fas fa-face-smile-beam"></i>
+            </div>
+        </section>
+
+        <section class="features">
+            <h2>Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <h3>Admin Authorization</h3>
+                    <p>Admin must authenticate with face scan before registering new users</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <h3>Real-Time Detection</h3>
+                    <p>Works with live camera input for instant face detection and recognition</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <h3>Anti-Spoofing</h3>
+                    <p>Built-in liveness detection to prevent photo and video spoofing attacks</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-sun"></i>
+                    </div>
+                    <h3>Lighting Adaptation</h3>
+                    <p>Advanced preprocessing handles varying lighting conditions</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="how-it-works">
+            <h2>How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Admin Setup</h3>
+                        <p>First admin registers, then authorizes all user registrations</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>User Registration</h3>
+                        <p>Admin scans face to authorize, then user captures their face</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Mark Attendance</h3>
+                        <p>Users punch in/out by showing their face to the camera</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="status-section">
+            <h2>System Status</h2>
+            <div id="system-status" class="status-grid">
+                <div class="status-card">
+                    <i class="fas fa-server"></i>
+                    <span class="status-label">Server</span>
+                    <span class="status-value" id="server-status">Checking...</span>
+                </div>
+                <div class="status-card">
+                    <i class="fas fa-database"></i>
+                    <span class="status-label">Database</span>
+                    <span class="status-value" id="db-status">Checking...</span>
+                </div>
+                <div class="status-card">
+                    <i class="fas fa-user-shield"></i>
+                    <span class="status-label">Admin Status</span>
+                    <span class="status-value" id="admin-status">Checking...</span>
+                </div>
+                <div class="status-card">
+                    <i class="fas fa-users"></i>
+                    <span class="status-label">Registered Users</span>
+                    <span class="status-value" id="users-count">-</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Face Authentication Attendance System | Built with Flask & OpenCV</p>
+    </footer>
+
+    <script>
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                document.getElementById('server-status').textContent = 'Online';
+                document.getElementById('server-status').className = 'status-value status-ok';
+                
+                document.getElementById('db-status').textContent = data.database === 'connected' ? 'Connected' : 'Not Configured';
+                document.getElementById('db-status').className = data.database === 'connected' ? 'status-value status-ok' : 'status-value status-warning';
+                
+                document.getElementById('admin-status').textContent = data.has_admin ? 'Configured' : 'Setup Required';
+                document.getElementById('admin-status').className = data.has_admin ? 'status-value status-ok' : 'status-value status-warning';
+                
+                document.getElementById('users-count').textContent = data.registered_users;
+            } catch (error) {
+                document.getElementById('server-status').textContent = 'Offline';
+                document.getElementById('server-status').className = 'status-value status-error';
+            }
+        }
+        
+        checkHealth();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>

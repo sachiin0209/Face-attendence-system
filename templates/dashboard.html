@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Face Authentication</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-face-smile"></i>
+            <span>FaceAuth Attendance</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/"><i class="fas fa-home"></i> Home</a></li>
+            <li><a href="/register"><i class="fas fa-user-plus"></i> Register</a></li>
+            <li><a href="/attendance"><i class="fas fa-clock"></i> Attendance</a></li>
+            <li><a href="/dashboard" class="active"><i class="fas fa-chart-bar"></i> Dashboard</a></li>
+            <li><a href="/admin"><i class="fas fa-shield-halved"></i> Admin</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h1><i class="fas fa-chart-bar"></i> Attendance Dashboard</h1>
+            <p>View attendance records and statistics</p>
+        </section>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-users">-</span>
+                    <span class="stat-label">Total Users</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="today-present">-</span>
+                    <span class="stat-label">Present Today</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-sign-out-alt"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="today-completed">-</span>
+                    <span class="stat-label">Completed Today</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="avg-hours">-</span>
+                    <span class="stat-label">Avg Hours (30d)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Today's Attendance -->
+        <section class="dashboard-section">
+            <div class="section-header">
+                <h2><i class="fas fa-calendar-day"></i> Today's Attendance</h2>
+                <span class="date-display" id="today-date">-</span>
+            </div>
+            <div class="table-container">
+                <table id="today-table">
+                    <thead>
+                        <tr>
+                            <th>Employee ID</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Punch In</th>
+                            <th>Punch Out</th>
+                            <th>Hours Worked</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="today-tbody">
+                        <tr><td colspan="7" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Attendance Report -->
+        <section class="dashboard-section">
+            <div class="section-header">
+                <h2><i class="fas fa-file-alt"></i> Attendance Report</h2>
+                <div class="report-filters">
+                    <input type="date" id="start-date" class="date-input">
+                    <span>to</span>
+                    <input type="date" id="end-date" class="date-input">
+                    <input type="text" id="filter-employee" placeholder="Employee ID (optional)" class="filter-input">
+                    <button id="generate-report" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Generate
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="report-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Employee ID</th>
+                            <th>Name</th>
+                            <th>Punch In</th>
+                            <th>Punch Out</th>
+                            <th>Hours Worked</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-tbody">
+                        <tr><td colspan="6" class="empty">Select date range and click Generate</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Face Authentication Attendance System</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

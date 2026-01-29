@@ -1,0 +1,50 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Environment Variables (NEVER upload this!)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Face Encodings (contains personal biometric data)
+data/face_encodings/
+data/admin_encodings/
+data/uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Wheel file (too large for GitHub)
+*.whl
