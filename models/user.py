@@ -118,8 +118,7 @@ class UserModel:
         
         try:
             result = client.table(cls.TABLE_NAME).update({
-                "is_registered": is_registered,
-                "updated_at": datetime.utcnow().isoformat()
+                "is_registered": is_registered
             }).eq("employee_id", employee_id).execute()
             return len(result.data) > 0 if result.data else False
         except Exception as e:

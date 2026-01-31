@@ -1,16 +1,21 @@
 /**
  * Attendance JavaScript
- * Handles punch-in/out with face recognition
+ * Handles automatic punch-in/out with face recognition
+ * - Auto-detects whether to punch-in or punch-out
+ * - Keeps camera on until face is detected
+ * - Hides result until verification completes
+ * - Discards attendance if punch-out is within 10-20 seconds of punch-in
  */
 
-let currentMode = 'in';
-let lastPunchInfo = null;
+let isProcessing = false;
+let cameraActive = false;
+let retryCount = 0;
+const MAX_RETRIES = 10;
 
 document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
     setupEventListeners();
-    checkUserInfo();
 });
 
 function updateClock() {
@@ -40,102 +45,135 @@ function updateClock() {
 }
 
 function setupEventListeners() {
-    // Mode toggle
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentMode = btn.dataset.mode;
-            updateModeDisplay();
-        });
-    });
-    
-    // Camera controls
-    document.getElementById('start-camera')?.addEventListener('click', async () => {
-        const started = await startCamera('attendance-video');
-        if (started) {
-            document.getElementById('start-camera').disabled = true;
-            document.getElementById('punch-in-btn').disabled = false;
-            document.getElementById('punch-out-btn').disabled = false;
-        }
-    });
-    
-    // Punch buttons
-    document.getElementById('punch-in-btn')?.addEventListener('click', () => processPunch('in'));
-    document.getElementById('punch-out-btn')?.addEventListener('click', () => processPunch('out'));
+    // Start camera button - starts camera and automatically processes attendance
+    document.getElementById('start-camera')?.addEventListener('click', startAttendanceProcess);
 }
 
-function updateModeDisplay() {
-    const modeTitle = document.getElementById('mode-title');
-    const punchBtn = document.getElementById('punch-btn');
+async function startAttendanceProcess() {
+    if (isProcessing) return;
     
-    if (currentMode === 'in') {
-        modeTitle.innerHTML = '<i class="fas fa-sign-in-alt"></i> Punch In';
-        punchBtn.innerHTML = '<i class="fas fa-fingerprint"></i> Punch In';
-        punchBtn.classList.remove('punch-out');
-        punchBtn.classList.add('punch-in');
-    } else {
-        modeTitle.innerHTML = '<i class="fas fa-sign-out-alt"></i> Punch Out';
-        punchBtn.innerHTML = '<i class="fas fa-fingerprint"></i> Punch Out';
-        punchBtn.classList.remove('punch-in');
-        punchBtn.classList.add('punch-out');
-    }
-}
-
-async function processPunch(mode) {
-    const btn = document.getElementById(mode === 'in' ? 'punch-in-btn' : 'punch-out-btn');
+    const btn = document.getElementById('start-camera');
+    const processingStatus = document.getElementById('processing-status');
     const resultCard = document.getElementById('result-card');
     
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    // Hide any previous results
+    resultCard.classList.add('hidden');
+    resultCard.classList.remove('show', 'success', 'error');
     
-    // Hide previous result
-    resultCard.className = 'result-card';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Camera...';
+    isProcessing = true;
+    retryCount = 0;
     
     try {
-        // Capture frames (reduced for speed - 5 frames, 50ms interval)
-        const image = captureFrame('attendance-video', 'attendance-canvas');
-        
-        // Check if image capture was successful
-        if (!image) {
+        // Start camera
+        const started = await startCamera('attendance-video');
+        if (!started) {
             displayResult({
                 success: false,
-                message: 'Could not capture image. Please ensure camera is active and try again.'
+                message: 'Could not access camera. Please ensure camera permissions are granted.'
             });
-            btn.disabled = false;
-            btn.innerHTML = mode === 'in' 
-                ? '<i class="fas fa-sign-in-alt"></i> Punch In'
-                : '<i class="fas fa-sign-out-alt"></i> Punch Out';
+            resetButton();
             return;
         }
         
-        const spoofFrames = await captureMultipleFrames('attendance-video', 'attendance-canvas', 5, 50);
+        cameraActive = true;
         
-        const response = await fetch(`/api/attendance/${mode === 'in' ? 'punch-in' : 'punch-out'}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image: image,
-                spoof_frames: spoofFrames
-            })
-        });
+        // Show processing status
+        processingStatus.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting Face...';
         
-        const data = await response.json();
+        // Wait for camera to stabilize
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        displayResult(data);
+        // Try to detect and verify face - keep trying until success or max retries
+        await attemptFaceDetection();
         
     } catch (error) {
-        console.error('Punch error:', error);
+        console.error('Attendance error:', error);
+        stopCameraAndReset();
         displayResult({
             success: false,
-            message: 'Error connecting to server'
+            message: 'Error during attendance process. Please try again.'
         });
     }
+}
+
+async function attemptFaceDetection() {
+    const processingStatus = document.getElementById('processing-status');
+    const statusText = document.getElementById('status-text');
     
+    while (cameraActive && retryCount < MAX_RETRIES) {
+        retryCount++;
+        statusText.textContent = `Detecting face... (Attempt ${retryCount}/${MAX_RETRIES})`;
+        
+        // Capture image
+        const image = captureFrame('attendance-video', 'attendance-canvas');
+        
+        if (!image) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+        }
+        
+        // Capture spoof frames
+        statusText.textContent = 'Verifying liveness...';
+        const spoofFrames = await captureMultipleFrames('attendance-video', 'attendance-canvas', 5, 50);
+        
+        // Send to server for verification
+        statusText.textContent = 'Verifying identity...';
+        
+        try {
+            const response = await fetch('/api/attendance/mark', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: image,
+                    spoof_frames: spoofFrames
+                })
+            });
+            
+            const data = await response.json();
+            
+            // Check if face was detected
+            if (data.success || (data.message && !data.message.toLowerCase().includes('no face'))) {
+                // Face was detected (success or other error like "not recognized")
+                stopCameraAndReset();
+                processingStatus.classList.add('hidden');
+                displayResult(data);
+                return;
+            }
+            
+            // No face detected, wait and retry
+            statusText.textContent = 'No face detected. Please position your face in the frame...';
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+        } catch (error) {
+            console.error('API error:', error);
+            statusText.textContent = 'Connection error. Retrying...';
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+    
+    // Max retries reached
+    stopCameraAndReset();
+    processingStatus.classList.add('hidden');
+    displayResult({
+        success: false,
+        message: 'Could not detect face after multiple attempts. Please ensure good lighting and face visibility.'
+    });
+}
+
+function stopCameraAndReset() {
+    cameraActive = false;
+    stopCamera();
+    resetButton();
+}
+
+function resetButton() {
+    const btn = document.getElementById('start-camera');
     btn.disabled = false;
-    btn.innerHTML = mode === 'in' 
-        ? '<i class="fas fa-sign-in-alt"></i> Punch In'
-        : '<i class="fas fa-sign-out-alt"></i> Punch Out';
+    btn.innerHTML = '<i class="fas fa-video"></i> Start Camera & Mark Attendance';
+    isProcessing = false;
 }
 
 function displayResult(data) {
@@ -148,6 +186,7 @@ function displayResult(data) {
     const resultName = document.getElementById('result-name');
     const resultEmployeeId = document.getElementById('result-employee-id');
     const resultDepartment = document.getElementById('result-department');
+    const resultAction = document.getElementById('result-action');
     const resultTime = document.getElementById('result-time');
     const resultConfidence = document.getElementById('result-confidence');
     const resultHours = document.getElementById('result-hours');
@@ -164,111 +203,63 @@ function displayResult(data) {
         if (resultName) resultName.textContent = data.name || '-';
         if (resultEmployeeId) resultEmployeeId.textContent = data.employee_id || '-';
         if (resultDepartment) resultDepartment.textContent = data.department || '-';
+        if (resultAction) resultAction.textContent = data.action || '-';
         if (resultTime) resultTime.textContent = data.time ? formatTime(data.time) : '-';
         if (resultConfidence) resultConfidence.textContent = data.confidence ? `${(data.confidence * 100).toFixed(1)}%` : '-';
         
         // Show hours worked for punch-out
         if (data.hours_worked && hoursWorkedRow && resultHours) {
-            resultHours.textContent = data.hours_worked;
+            resultHours.textContent = `${data.hours_worked} hours`;
             hoursWorkedRow.style.display = 'block';
         } else if (hoursWorkedRow) {
             hoursWorkedRow.style.display = 'none';
         }
-        
-        // Store last punch info
-        lastPunchInfo = data;
         
     } else {
         resultCard.className = 'result-card error show';
         resultCard.classList.remove('hidden');
         resultIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
         if (resultTitle) resultTitle.textContent = 'Failed';
-        if (resultMessage) resultMessage.textContent = data.message || 'Unable to process punch';
+        if (resultMessage) resultMessage.textContent = data.message || 'Unable to process attendance';
         
         // Clear fields on error
         if (resultName) resultName.textContent = '-';
         if (resultEmployeeId) resultEmployeeId.textContent = '-';
         if (resultDepartment) resultDepartment.textContent = '-';
+        if (resultAction) resultAction.textContent = '-';
         if (resultTime) resultTime.textContent = '-';
         if (resultConfidence) resultConfidence.textContent = '-';
+        if (hoursWorkedRow) hoursWorkedRow.style.display = 'none';
     }
     
-    // Auto-hide after 10 seconds
+    // Auto-hide after 15 seconds
     setTimeout(() => {
         resultCard.classList.remove('show');
-    }, 10000);
+        resultCard.classList.add('hidden');
+    }, 15000);
 }
 
-function formatTime(isoString) {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    });
-}
-
-function updateUserInfo(data) {
-    const userInfoSection = document.getElementById('user-info-section');
-    if (userInfoSection) {
-        document.getElementById('info-name').textContent = data.name;
-        document.getElementById('info-id').textContent = data.employee_id;
-        document.getElementById('info-punch-time').textContent = formatTime(data.time);
-        userInfoSection.classList.remove('hidden');
-    }
-}
-
-function checkUserInfo() {
-    // Check localStorage for recent punch info
-    const savedInfo = localStorage.getItem('lastPunchInfo');
-    if (savedInfo) {
-        try {
-            const info = JSON.parse(savedInfo);
-            const punchTime = new Date(info.time);
-            const now = new Date();
-            
-            // Only show if punched in today
-            if (punchTime.toDateString() === now.toDateString() && info.type === 'punch_in') {
-                updateUserInfo(info);
-            }
-        } catch {}
-    }
-}
-
-// Quick lookup functionality
-async function quickLookup() {
-    const employeeId = prompt('Enter Employee ID for quick lookup:');
-    if (!employeeId) return;
-    
+function formatTime(timeString) {
     try {
-        const response = await fetch(`/api/attendance/status/${employeeId}`);
-        const data = await response.json();
-        
-        if (data.success) {
-            alert(`Employee: ${data.name}\nStatus: ${data.status}\nLast Punch: ${data.last_punch_time || 'N/A'}`);
-        } else {
-            alert(data.message || 'Employee not found');
+        // Handle both ISO format and simple datetime format
+        const date = new Date(timeString);
+        if (isNaN(date.getTime())) {
+            return timeString;
         }
+        return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
     } catch {
-        alert('Error fetching status');
+        return timeString;
     }
 }
 
-// Keyboard shortcuts
+// Keyboard shortcut - Space to start attendance
 document.addEventListener('keydown', (e) => {
-    // Space to punch
-    if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+    if (e.code === 'Space' && !e.target.matches('input, textarea') && !isProcessing) {
         e.preventDefault();
-        document.getElementById('punch-btn')?.click();
-    }
-    
-    // I for punch in
-    if (e.code === 'KeyI' && !e.target.matches('input, textarea')) {
-        document.querySelector('[data-mode="in"]')?.click();
-    }
-    
-    // O for punch out
-    if (e.code === 'KeyO' && !e.target.matches('input, textarea')) {
-        document.querySelector('[data-mode="out"]')?.click();
+        startAttendanceProcess();
     }
 });

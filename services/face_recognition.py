@@ -223,6 +223,11 @@ class FaceRecognitionService:
         if len(face_locations) == 0:
             # Try again with original size if scaled detection failed
             face_locations = self.detect_faces(image)
+        
+        if len(face_locations) == 0:
+            # Final fallback: use face_recognition library's HOG detector
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            face_locations = face_recognition.face_locations(rgb_image, model='hog')
             
         if len(face_locations) == 0:
             return {

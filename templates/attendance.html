@@ -25,7 +25,7 @@
     <main class="container">
         <section class="page-header">
             <h1><i class="fas fa-clock"></i> Mark Attendance</h1>
-            <p>Use face recognition to punch in or punch out</p>
+            <p>Face recognition will automatically detect punch-in or punch-out</p>
         </section>
 
         <div class="attendance-container">
@@ -40,18 +40,14 @@
                 </div>
                 
                 <div class="camera-controls">
-                    <button type="button" id="start-camera" class="btn btn-primary">
-                        <i class="fas fa-video"></i> Start Camera
+                    <button type="button" id="start-camera" class="btn btn-primary btn-large">
+                        <i class="fas fa-video"></i> Start Camera & Mark Attendance
                     </button>
                 </div>
 
-                <div class="attendance-buttons">
-                    <button type="button" id="punch-in-btn" class="btn btn-success btn-large" disabled>
-                        <i class="fas fa-sign-in-alt"></i> Punch In
-                    </button>
-                    <button type="button" id="punch-out-btn" class="btn btn-warning btn-large" disabled>
-                        <i class="fas fa-sign-out-alt"></i> Punch Out
-                    </button>
+                <div id="processing-status" class="processing-status hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span id="status-text">Verifying face...</span>
                 </div>
             </div>
 
@@ -71,6 +67,7 @@
                         <p><strong>Name:</strong> <span id="result-name">-</span></p>
                         <p><strong>Employee ID:</strong> <span id="result-employee-id">-</span></p>
                         <p><strong>Department:</strong> <span id="result-department">-</span></p>
+                        <p><strong>Action:</strong> <span id="result-action">-</span></p>
                         <p><strong>Time:</strong> <span id="result-time">-</span></p>
                         <p><strong>Confidence:</strong> <span id="result-confidence">-</span></p>
                         <p id="hours-worked-row" style="display: none;">
@@ -83,11 +80,12 @@
                 <div class="instructions attendance-instructions">
                     <h3><i class="fas fa-info-circle"></i> Instructions</h3>
                     <ul>
+                        <li>Click "Start Camera & Mark Attendance"</li>
                         <li>Position your face in the camera frame</li>
-                        <li>Ensure good lighting on your face</li>
-                        <li>Click "Punch In" when arriving</li>
-                        <li>Click "Punch Out" when leaving</li>
-                        <li>Wait for face recognition confirmation</li>
+                        <li>System will automatically verify your face</li>
+                        <li>If no punch-in today → Records Punch-In</li>
+                        <li>If already punched-in → Records Punch-Out</li>
+                        <li>Wait for verification before seeing results</li>
                     </ul>
                 </div>
             </div>

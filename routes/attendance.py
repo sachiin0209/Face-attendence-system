@@ -17,6 +17,167 @@ antispoof_service = AntiSpoofingService()
 preprocessor = ImagePreprocessor()
 
 
+@attendance_bp.route('/mark', methods=['POST'])
+def mark_attendance():
+    """
+    Unified attendance marking - automatically detects punch-in or punch-out
+    
+    Expected JSON:
+    {
+        "image": "base64_image",
+        "spoof_frames": ["base64_frame1", "base64_frame2", ...] (optional)
+    }
+    
+    Logic:
+    - If no punch-in today → Record punch-in
+    - If already punched-in → Record punch-out
+    - If punch-out within 10-20 seconds of punch-in → Discard attendance
+    """
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "No data provided"
+            }), 400
+        
+        if 'image' not in data or not data['image']:
+            return jsonify({
+                "success": False,
+                "message": "No image provided"
+            }), 400
+        
+        # Decode and preprocess image
+        image = decode_base64_image(data['image'])
+        if image is None:
+            return jsonify({
+                "success": False,
+                "message": "Could not decode image"
+            }), 400
+        
+        image = preprocessor.preprocess_for_recognition(image)
+        
+        # Anti-spoofing check if frames provided
+        if Config.SPOOF_DETECTION_ENABLED and 'spoof_frames' in data:
+            frames = []
+            for frame_b64 in data['spoof_frames']:
+                frame = decode_base64_image(frame_b64)
+                if frame is not None:
+                    frames.append(frame)
+            
+            if len(frames) >= 5:
+                spoof_result = antispoof_service.comprehensive_spoof_check(frames)
+                if not spoof_result.get('overall_is_real', True):
+                    return jsonify({
+                        "success": False,
+                        "message": "Liveness check failed. Please ensure you're using a live camera.",
+                        "spoof_details": spoof_result
+                    }), 400
+        
+        # Identify face (includes admins)
+        identify_result = face_service.identify_face(image, include_admins=True)
+        
+        if not identify_result['success']:
+            return jsonify(identify_result), 400
+        
+        employee_id = identify_result['person_id']
+        confidence = identify_result.get('confidence', 0)
+        
+        # Get user or admin name
+        user = UserModel.get_by_employee_id(employee_id)
+        if user:
+            user_name = user.get('name', employee_id)
+            department = user.get('department')
+        else:
+            # Check if it's an admin
+            admin = AdminModel.get_by_admin_id(employee_id)
+            if admin:
+                user_name = admin.get('name', employee_id)
+                department = 'Admin'
+            else:
+                user_name = employee_id
+                department = None
+        
+        # Check current attendance status and auto-determine action
+        existing_record = AttendanceModel.get_today_record(employee_id)
+        
+        if not existing_record or not existing_record.get('punch_in'):
+            # No punch-in today → Record punch-in
+            attendance_result = AttendanceModel.record_punch_in(employee_id, confidence)
+            
+            if attendance_result and 'error' in attendance_result:
+                return jsonify({
+                    "success": False,
+                    "message": attendance_result['error'],
+                    "employee_id": employee_id
+                }), 400
+            
+            return jsonify({
+                "success": True,
+                "message": f"Punch-in recorded for {user_name}",
+                "action": "Punch In",
+                "employee_id": employee_id,
+                "name": user_name,
+                "department": department,
+                "confidence": confidence,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        elif existing_record.get('punch_out'):
+            # Already punched out today
+            return jsonify({
+                "success": False,
+                "message": f"Attendance already complete for {user_name} today",
+                "employee_id": employee_id,
+                "name": user_name
+            }), 400
+        
+        else:
+            # Has punch-in but no punch-out → Record punch-out
+            # First check if punch-out is within 10-20 seconds of punch-in (discard if so)
+            attendance_result = AttendanceModel.record_punch_out_with_validation(
+                employee_id, 
+                confidence,
+                min_duration_seconds=20  # Minimum 20 seconds between punch-in and punch-out
+            )
+            
+            if attendance_result and 'error' in attendance_result:
+                return jsonify({
+                    "success": False,
+                    "message": attendance_result['error'],
+                    "employee_id": employee_id
+                }), 400
+            
+            if attendance_result and attendance_result.get('discarded'):
+                return jsonify({
+                    "success": False,
+                    "message": f"Attendance discarded - punch-out too soon after punch-in (within {attendance_result.get('duration_seconds', 0):.0f} seconds)",
+                    "employee_id": employee_id,
+                    "name": user_name
+                }), 400
+            
+            hours_worked = attendance_result.get('hours_worked', 0) if attendance_result else 0
+            
+            return jsonify({
+                "success": True,
+                "message": f"Punch-out recorded for {user_name}",
+                "action": "Punch Out",
+                "employee_id": employee_id,
+                "name": user_name,
+                "department": department,
+                "confidence": confidence,
+                "hours_worked": hours_worked,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Attendance failed: {str(e)}"
+        }), 500
+
+
 @attendance_bp.route('/punch-in', methods=['POST'])
 def punch_in():
     """

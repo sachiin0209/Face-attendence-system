@@ -648,6 +648,30 @@ body {
     box-shadow: var(--shadow);
 }
 
+/* Processing Status Indicator */
+.processing-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: white;
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    animation: pulse-bg 2s ease-in-out infinite;
+}
+
+.processing-status i {
+    font-size: 1.5rem;
+}
+
+@keyframes pulse-bg {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
 /* Scanning Animation */
 .scanning-indicator {
     position: absolute;

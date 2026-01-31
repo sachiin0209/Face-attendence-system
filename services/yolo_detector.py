@@ -4,8 +4,37 @@ Uses OpenCV Haar Cascade (fastest) for face detection
 """
 import cv2
 import numpy as np
+import os
 from typing import List, Tuple, Optional
 from config import Config
+
+
+def get_haar_cascade_path(cascade_name: str) -> str:
+    """Get the path to a Haar cascade file"""
+    # Try cv2.data first
+    try:
+        if hasattr(cv2, 'data') and cv2.data.haarcascades:
+            path = cv2.data.haarcascades + cascade_name
+            if os.path.exists(path):
+                return path
+    except:
+        pass
+    
+    # Try common OpenCV installation paths
+    possible_paths = [
+        # Windows paths
+        os.path.join(os.path.dirname(cv2.__file__), 'data', cascade_name),
+        os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', cascade_name),
+        # Site-packages path
+        os.path.join(os.path.dirname(os.path.dirname(cv2.__file__)), 'cv2', 'data', cascade_name),
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    # Last resort - just return the name and hope OpenCV finds it
+    return cascade_name
 
 
 class FastFaceDetector:
@@ -19,14 +48,18 @@ class FastFaceDetector:
         self._initialized = False
         
         # Primary detector: Haar Cascade (very fast)
-        self.haar_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
+        cascade_path = get_haar_cascade_path('haarcascade_frontalface_default.xml')
+        self.haar_cascade = cv2.CascadeClassifier(cascade_path)
         
         # Alternative: Haar cascade with alt tree (faster)
-        self.haar_alt = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_alt2.xml'
-        )
+        alt_path = get_haar_cascade_path('haarcascade_frontalface_alt2.xml')
+        self.haar_alt = cv2.CascadeClassifier(alt_path)
+        
+        # Verify cascades loaded
+        if self.haar_cascade.empty():
+            print(f"Warning: Could not load primary Haar cascade from {cascade_path}")
+        if self.haar_alt.empty():
+            print(f"Warning: Could not load alt Haar cascade from {alt_path}")
     
     def detect_faces_haar(self, image: np.ndarray, fast_mode: bool = True) -> List[Tuple[int, int, int, int]]:
         """
@@ -45,21 +78,21 @@ class FastFaceDetector:
         gray = cv2.equalizeHist(gray)
         
         if fast_mode:
-            # Faster settings
+            # Balanced settings - not too strict
             faces = self.haar_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.2,  # Larger = faster, less accurate
-                minNeighbors=3,
-                minSize=(60, 60),
+                scaleFactor=1.1,  # More accurate detection
+                minNeighbors=4,
+                minSize=(30, 30),  # Smaller min size for better detection
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
         else:
             # More accurate settings
             faces = self.haar_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.1,
+                scaleFactor=1.05,
                 minNeighbors=5,
-                minSize=(30, 30),
+                minSize=(20, 20),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
         
