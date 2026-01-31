@@ -13,11 +13,11 @@ cmake==3.28.1
 dlib==19.24.2
 face-recognition==1.3.0
 
-# Image Processing
+# Image Processing - USE PRE-BUILT WHEELS
 opencv-python-headless==4.9.0.80
-numpy==1.26.3
-scipy==1.12.0
-Pillow==10.2.0
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0,<2.0.0
+Pillow>=10.0.0
 
 # Environment Variables
 python-dotenv==1.0.0
