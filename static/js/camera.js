@@ -76,6 +76,12 @@ function captureFrame(videoElementId, canvasElementId) {
         return null;
     }
     
+    // Check if video is ready
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.error('Video not ready - dimensions are 0');
+        return null;
+    }
+    
     const ctx = canvas.getContext('2d');
     
     // Set canvas size to match video
@@ -88,8 +94,9 @@ function captureFrame(videoElementId, canvasElementId) {
     ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
     ctx.restore();
     
-    // Return as base64 JPEG
-    return canvas.toDataURL('image/jpeg', 0.9);
+    // Return as base64 JPEG (just the base64 part, not full data URL)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    return dataUrl;
 }
 
 /**

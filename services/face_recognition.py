@@ -1,6 +1,7 @@
 """
 Face Recognition Service
 Handles face detection, encoding, and recognition
+Optimized for speed with YOLO detection
 """
 import cv2
 import numpy as np
@@ -14,7 +15,7 @@ from config import Config
 class FaceRecognitionService:
     """
     Service class for face recognition operations including:
-    - Face detection and encoding
+    - Face detection and encoding (with YOLO for speed)
     - Face matching and identification
     """
     
@@ -29,13 +30,26 @@ class FaceRecognitionService:
         self.encodings_dir = encodings_dir or Config.FACE_ENCODINGS_DIR
         self.tolerance = tolerance or Config.FACE_RECOGNITION_TOLERANCE
         self.detection_model = Config.FACE_DETECTION_MODEL
+        self.num_jitters = Config.FACE_NUM_JITTERS
+        self.scale_factor = Config.IMAGE_SCALE_FACTOR
         self.known_face_encodings: Dict[str, np.ndarray] = {}
+        
+        # Initialize fast detector
+        self._fast_detector = None
         
         # Ensure directory exists
         os.makedirs(self.encodings_dir, exist_ok=True)
         
         # Load existing face encodings
         self._load_all_encodings()
+    
+    @property
+    def fast_detector(self):
+        """Lazy load fast detector"""
+        if self._fast_detector is None:
+            from services.yolo_detector import get_face_detector
+            self._fast_detector = get_face_detector()
+        return self._fast_detector
     
     def _load_all_encodings(self):
         """Load all saved face encodings from disk"""
@@ -63,9 +77,21 @@ class FaceRecognitionService:
         if person_id in self.known_face_encodings:
             del self.known_face_encodings[person_id]
     
+    def _resize_image(self, image: np.ndarray) -> Tuple[np.ndarray, float]:
+        """Resize image for faster processing"""
+        if self.scale_factor >= 1.0:
+            return image, 1.0
+        
+        height, width = image.shape[:2]
+        new_width = int(width * self.scale_factor)
+        new_height = int(height * self.scale_factor)
+        
+        resized = cv2.resize(image, (new_width, new_height))
+        return resized, self.scale_factor
+    
     def detect_faces(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
-        Detect faces in an image
+        Detect faces in an image using fast detection
         
         Args:
             image: BGR image (from OpenCV)
@@ -73,12 +99,40 @@ class FaceRecognitionService:
         Returns:
             List of face locations as (top, right, bottom, left)
         """
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        face_locations = face_recognition.face_locations(
-            rgb_image, 
-            model=self.detection_model
-        )
-        return face_locations
+        # Use fast Haar cascade detector (fastest method)
+        if self.detection_model in ['yolo', 'haar', 'fast']:
+            return self.fast_detector.detect_faces(image)
+        else:
+            # Fall back to face_recognition library (slower but more accurate)
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            return face_recognition.face_locations(rgb_image, model=self.detection_model)
+    
+    def detect_faces_fast(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """
+        Fast face detection with image scaling
+        
+        Args:
+            image: BGR image
+            
+        Returns:
+            Face locations scaled back to original image size
+        """
+        # Resize for faster processing
+        resized, scale = self._resize_image(image)
+        
+        # Detect on resized image
+        locations = self.detect_faces(resized)
+        
+        # Scale locations back to original size
+        if scale < 1.0:
+            scale_inv = 1.0 / scale
+            locations = [
+                (int(top * scale_inv), int(right * scale_inv), 
+                 int(bottom * scale_inv), int(left * scale_inv))
+                for (top, right, bottom, left) in locations
+            ]
+        
+        return locations
     
     def get_face_encoding(self, image: np.ndarray, 
                           face_location: Tuple = None) -> Optional[np.ndarray]:
@@ -95,9 +149,16 @@ class FaceRecognitionService:
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
         if face_location:
-            encodings = face_recognition.face_encodings(rgb_image, [face_location])
+            encodings = face_recognition.face_encodings(
+                rgb_image, 
+                [face_location],
+                num_jitters=self.num_jitters
+            )
         else:
-            encodings = face_recognition.face_encodings(rgb_image)
+            encodings = face_recognition.face_encodings(
+                rgb_image,
+                num_jitters=self.num_jitters
+            )
         
         return encodings[0] if encodings else None
     
@@ -147,7 +208,7 @@ class FaceRecognitionService:
     
     def identify_face(self, image: np.ndarray, include_admins: bool = True) -> Dict[str, Any]:
         """
-        Identify a face from the known faces database
+        Identify a face from the known faces database (optimized for speed)
         
         Args:
             image: BGR image containing a face
@@ -156,8 +217,13 @@ class FaceRecognitionService:
         Returns:
             Dictionary with person_id, confidence, and status
         """
-        face_locations = self.detect_faces(image)
+        # Use fast detection
+        face_locations = self.detect_faces_fast(image)
         
+        if len(face_locations) == 0:
+            # Try again with original size if scaled detection failed
+            face_locations = self.detect_faces(image)
+            
         if len(face_locations) == 0:
             return {
                 "success": False,

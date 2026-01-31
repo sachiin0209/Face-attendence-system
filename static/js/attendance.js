@@ -93,9 +93,23 @@ async function processPunch(mode) {
     resultCard.className = 'result-card';
     
     try {
-        // Capture frames
+        // Capture frames (reduced for speed - 5 frames, 50ms interval)
         const image = captureFrame('attendance-video', 'attendance-canvas');
-        const spoofFrames = await captureMultipleFrames('attendance-video', 'attendance-canvas', 10, 100);
+        
+        // Check if image capture was successful
+        if (!image) {
+            displayResult({
+                success: false,
+                message: 'Could not capture image. Please ensure camera is active and try again.'
+            });
+            btn.disabled = false;
+            btn.innerHTML = mode === 'in' 
+                ? '<i class="fas fa-sign-in-alt"></i> Punch In'
+                : '<i class="fas fa-sign-out-alt"></i> Punch Out';
+            return;
+        }
+        
+        const spoofFrames = await captureMultipleFrames('attendance-video', 'attendance-canvas', 5, 50);
         
         const response = await fetch(`/api/attendance/${mode === 'in' ? 'punch-in' : 'punch-out'}`, {
             method: 'POST',
@@ -111,6 +125,7 @@ async function processPunch(mode) {
         displayResult(data);
         
     } catch (error) {
+        console.error('Punch error:', error);
         displayResult({
             success: false,
             message: 'Error connecting to server'

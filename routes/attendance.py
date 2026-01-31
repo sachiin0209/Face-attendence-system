@@ -31,7 +31,13 @@ def punch_in():
     try:
         data = request.json
         
-        if 'image' not in data:
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "No data provided"
+            }), 400
+        
+        if 'image' not in data or not data['image']:
             return jsonify({
                 "success": False,
                 "message": "No image provided"
@@ -129,7 +135,13 @@ def punch_out():
     try:
         data = request.json
         
-        if 'image' not in data:
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "No data provided"
+            }), 400
+        
+        if 'image' not in data or not data['image']:
             return jsonify({
                 "success": False,
                 "message": "No image provided"

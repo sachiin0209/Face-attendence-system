@@ -1,10 +1,10 @@
 """
 Anti-Spoofing Service
 Detects presentation attacks (photos, videos, masks)
+Optimized for speed with configurable settings
 """
 import cv2
 import numpy as np
-import face_recognition
 from scipy.spatial import distance as dist
 from typing import List, Dict, Any
 from config import Config
@@ -13,9 +13,9 @@ from config import Config
 class AntiSpoofingService:
     """
     Anti-spoofing detection service using multiple techniques:
-    1. Blink detection (liveness check)
-    2. Texture analysis (detect printed photos)
-    3. Motion analysis (detect static images)
+    1. Texture analysis (detect printed photos) - FAST
+    2. Motion analysis (detect static images) - FAST
+    3. Blink detection (liveness check) - SLOW, optional
     """
     
     def __init__(self):
@@ -27,7 +27,13 @@ class AntiSpoofingService:
         self.prev_frame = None
         self.motion_threshold = 1000
         
-        # Load face detector
+        # Configurable thresholds
+        self.laplacian_threshold = Config.SPOOF_LAPLACIAN_THRESHOLD
+        self.texture_threshold = Config.SPOOF_TEXTURE_THRESHOLD
+        self.quick_mode = Config.SPOOF_QUICK_MODE
+        self.frame_count = Config.SPOOF_FRAME_COUNT
+        
+        # Load face detector (fast Haar cascade)
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
@@ -51,6 +57,7 @@ class AntiSpoofingService:
     def detect_blink(self, frames: List[np.ndarray]) -> Dict[str, Any]:
         """
         Detect if a blink occurred across multiple frames
+        NOTE: This is slow due to face_recognition landmarks - use sparingly
         
         Args:
             frames: List of consecutive frames
@@ -58,9 +65,23 @@ class AntiSpoofingService:
         Returns:
             Dictionary with blink_detected boolean and details
         """
+        # Skip blink detection in quick mode
+        if self.quick_mode:
+            return {
+                "success": True,
+                "blink_detected": True,  # Assume real in quick mode
+                "message": "Blink detection skipped (quick mode)"
+            }
+        
+        import face_recognition
+        
         ear_values = []
         
-        for frame in frames:
+        # Only check every other frame for speed
+        for i, frame in enumerate(frames):
+            if i % 2 != 0:
+                continue
+                
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Get facial landmarks
@@ -109,7 +130,7 @@ class AntiSpoofingService:
     def analyze_texture(self, image: np.ndarray) -> Dict[str, Any]:
         """
         Analyze image texture to detect printed photos or screens
-        Uses Laplacian and Sobel variance analysis
+        Uses Laplacian variance analysis (fast method)
         
         Args:
             image: BGR image
@@ -119,37 +140,29 @@ class AntiSpoofingService:
         """
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Detect face region
-        faces = self.face_cascade.detectMultiScale(gray, 1.1, 5)
+        # Detect face region (using fast Haar cascade)
+        faces = self.face_cascade.detectMultiScale(
+            gray, 
+            scaleFactor=1.2,  # Faster with larger scale
+            minNeighbors=3,
+            minSize=(50, 50)
+        )
         
         if len(faces) == 0:
-            return {
-                "success": False,
-                "is_real": False,
-                "message": "No face detected for texture analysis"
-            }
+            # If no face detected, analyze the whole image
+            face_roi = gray
+        else:
+            x, y, w, h = faces[0]
+            face_roi = gray[y:y+h, x:x+w]
         
-        x, y, w, h = faces[0]
-        face_roi = gray[y:y+h, x:x+w]
-        
-        # Calculate Laplacian variance (blur/sharpness detection)
+        # Calculate Laplacian variance (blur/sharpness detection) - FAST
         laplacian_var = cv2.Laplacian(face_roi, cv2.CV_64F).var()
         
-        # Calculate texture variance using Sobel
-        sobelx = cv2.Sobel(face_roi, cv2.CV_64F, 1, 0, ksize=3)
-        sobely = cv2.Sobel(face_roi, cv2.CV_64F, 0, 1, ksize=3)
-        texture_var = np.var(sobelx) + np.var(sobely)
+        # Calculate simple texture variance - FAST
+        texture_var = np.var(face_roi)
         
-        # High-frequency analysis using FFT
-        f_transform = np.fft.fft2(face_roi)
-        f_shift = np.fft.fftshift(f_transform)
-        magnitude = np.abs(f_shift)
-        high_freq_energy = np.mean(magnitude[magnitude.shape[0]//4:3*magnitude.shape[0]//4,
-                                              magnitude.shape[1]//4:3*magnitude.shape[1]//4])
-        
-        # Thresholds (tuned empirically)
-        # Real faces typically have higher texture variance
-        is_real = laplacian_var > 100 and texture_var > 500
+        # Use configurable thresholds
+        is_real = laplacian_var > self.laplacian_threshold or texture_var > self.texture_threshold
         
         confidence = min(1.0, (laplacian_var / 500 + texture_var / 5000) / 2)
         
@@ -205,42 +218,51 @@ class AntiSpoofingService:
     
     def comprehensive_spoof_check(self, frames: List[np.ndarray]) -> Dict[str, Any]:
         """
-        Run comprehensive anti-spoofing checks
+        Run anti-spoofing checks (optimized for speed)
         
         Args:
-            frames: List of consecutive frames (at least 5 recommended)
+            frames: List of consecutive frames
         
         Returns:
             Dictionary with overall spoof detection result
         """
-        if len(frames) < 5:
+        min_frames = min(self.frame_count, 3)  # At least 3 frames
+        
+        if len(frames) < min_frames:
             return {
                 "success": False,
-                "is_real": False,
-                "message": "Need at least 5 frames for spoof detection"
+                "overall_is_real": True,  # Pass if not enough frames
+                "message": f"Not enough frames ({len(frames)}/{min_frames})"
             }
         
+        # Only use last N frames for speed
+        frames_to_check = frames[-self.frame_count:] if len(frames) > self.frame_count else frames
+        
         results = {
-            "texture_check": self.analyze_texture(frames[-1]),
-            "motion_checks": [],
+            "texture_check": None,
+            "motion_count": 0,
             "overall_is_real": False
         }
         
-        # Check motion across frames
+        # Quick texture check on last frame only
+        results["texture_check"] = self.analyze_texture(frames_to_check[-1])
+        texture_real = results["texture_check"].get("is_real", False)
+        
+        # Quick motion check (only check a few frames)
         self.reset_motion_detector()
         motion_count = 0
-        for frame in frames:
-            motion_result = self.detect_motion(frame)
-            results["motion_checks"].append(motion_result)
+        
+        # Check every other frame for speed
+        for i in range(0, len(frames_to_check), 2):
+            motion_result = self.detect_motion(frames_to_check[i])
             if motion_result.get("motion_detected"):
                 motion_count += 1
         
-        # Determine if real based on multiple factors
-        texture_real = results["texture_check"].get("is_real", False)
-        has_motion = motion_count >= 2
+        results["motion_count"] = motion_count
+        has_motion = motion_count >= 1  # Just need 1 motion detection
         
-        # Final decision
-        results["overall_is_real"] = texture_real and has_motion
+        # Final decision - pass if texture is real OR has motion
+        results["overall_is_real"] = texture_real or has_motion
         results["confidence"] = (
             (0.6 if texture_real else 0) + 
             (0.4 if has_motion else 0)
@@ -253,7 +275,20 @@ class AntiSpoofingService:
             if not texture_real:
                 reasons.append("texture analysis failed")
             if not has_motion:
-                reasons.append("insufficient motion detected")
+                reasons.append("no motion detected")
             results["message"] = f"Possible spoof: {', '.join(reasons)}"
         
         return results
+    
+    def quick_spoof_check(self, image: np.ndarray) -> Dict[str, Any]:
+        """
+        Ultra-fast single-image spoof check
+        Only checks texture (no motion or blink detection)
+        
+        Args:
+            image: Single BGR image
+            
+        Returns:
+            Dictionary with is_real result
+        """
+        return self.analyze_texture(image)

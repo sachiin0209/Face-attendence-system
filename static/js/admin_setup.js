@@ -65,7 +65,7 @@ async function registerFirstAdmin() {
         progressText.textContent = 'Processing...';
         progressBar.style.width = '50%';
         
-        const response = await fetch('/api/admin/register-first', {
+        const response = await fetch('/api/admin/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -53,11 +53,13 @@ function setupEventListeners() {
         const started = await startCamera('user-video');
         if (started) {
             document.getElementById('start-user-camera').disabled = true;
-            document.getElementById('capture-face-btn').disabled = false;
+            document.getElementById('capture-btn').disabled = false;
         }
     });
     
-    document.getElementById('capture-face-btn')?.addEventListener('click', registerUserFace);
+    document.getElementById('capture-btn')?.addEventListener('click', captureFaceImage);
+    document.getElementById('clear-btn')?.addEventListener('click', clearCapturedImages);
+    document.getElementById('register-btn')?.addEventListener('click', registerUser);
 }
 
 async function authorizeAdmin() {
@@ -171,29 +173,98 @@ function handleUserFormSubmit(e) {
     document.getElementById('preview-name').textContent = name;
 }
 
-async function registerUserFace() {
-    const btn = document.getElementById('capture-face-btn');
-    const msgDiv = document.getElementById('user-capture-message');
-    const progressContainer = document.getElementById('capture-progress');
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
+// Store captured images
+let capturedImages = [];
+
+function captureFaceImage() {
+    const image = captureFrame('user-video', 'user-canvas');
+    if (!image) {
+        alert('Failed to capture image. Please ensure camera is active.');
+        return;
+    }
+    
+    capturedImages.push(image);
+    
+    // Update UI
+    const countSpan = document.getElementById('capture-count');
+    if (countSpan) {
+        countSpan.textContent = capturedImages.length;
+    }
+    
+    // Display captured image thumbnail
+    const container = document.getElementById('captured-images');
+    if (container) {
+        const imgDiv = document.createElement('div');
+        imgDiv.className = 'captured-thumbnail';
+        imgDiv.innerHTML = `<img src="${image}" alt="Captured ${capturedImages.length}">`;
+        container.appendChild(imgDiv);
+    }
+    
+    // Enable clear button
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) clearBtn.disabled = false;
+    
+    // Enable register button if we have at least 3 images
+    const registerBtn = document.getElementById('register-btn');
+    if (registerBtn && capturedImages.length >= 3) {
+        registerBtn.disabled = false;
+    }
+    
+    // Update capture button text
+    const captureBtn = document.getElementById('capture-btn');
+    if (captureBtn && capturedImages.length >= 5) {
+        captureBtn.disabled = true;
+    }
+}
+
+function clearCapturedImages() {
+    capturedImages = [];
+    
+    // Update UI
+    const countSpan = document.getElementById('capture-count');
+    if (countSpan) countSpan.textContent = '0';
+    
+    const container = document.getElementById('captured-images');
+    if (container) container.innerHTML = '';
+    
+    // Disable buttons
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) clearBtn.disabled = true;
+    
+    const registerBtn = document.getElementById('register-btn');
+    if (registerBtn) registerBtn.disabled = true;
+    
+    // Re-enable capture button
+    const captureBtn = document.getElementById('capture-btn');
+    if (captureBtn) captureBtn.disabled = false;
+}
+
+async function registerUser() {
+    const btn = document.getElementById('register-btn');
+    
+    if (capturedImages.length < 3) {
+        alert('Please capture at least 3 images');
+        return;
+    }
+    
+    // Get form values directly from the form
+    const employeeId = document.getElementById('employee_id')?.value.trim();
+    const name = document.getElementById('name')?.value.trim();
+    const email = document.getElementById('email')?.value.trim();
+    const department = document.getElementById('department')?.value.trim() || '';
+    
+    // Validate required fields
+    if (!employeeId || !name || !email) {
+        alert('Please fill in all required fields (Employee ID, Name, Email)');
+        return;
+    }
     
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturing...';
-    msgDiv.className = 'message';
-    msgDiv.textContent = '';
-    progressContainer.classList.remove('hidden');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
     
     try {
-        // Capture multiple frames for registration
-        progressText.textContent = 'Capturing face images...';
-        progressBar.style.width = '20%';
-        
-        const images = await captureMultipleFrames('user-video', 'user-canvas', 5, 500);
-        const spoofFrames = await captureMultipleFrames('user-video', 'user-canvas', 15, 100);
-        
-        progressText.textContent = 'Processing...';
-        progressBar.style.width = '50%';
+        // Capture spoof frames for liveness check
+        const spoofFrames = await captureMultipleFrames('user-video', 'user-canvas', 10, 100);
         
         // Send registration request
         const response = await fetch('/api/users/register', {
@@ -201,51 +272,44 @@ async function registerUserFace() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 admin_session_token: adminSessionToken,
-                employee_id: userFormData.employee_id,
-                name: userFormData.name,
-                email: userFormData.email,
-                department: userFormData.department,
-                images: images,
+                employee_id: employeeId,
+                name: name,
+                email: email,
+                department: department,
+                images: capturedImages,
                 spoof_frames: spoofFrames
             })
         });
         
-        progressBar.style.width = '80%';
-        
         const data = await response.json();
         
-        progressBar.style.width = '100%';
-        
         if (data.success) {
-            progressText.textContent = 'Complete!';
-            
-            // Update step indicator
-            document.querySelector('[data-step="3"]').classList.add('completed');
-            
             // Stop camera
             stopCamera();
             
-            // Show success modal
-            showModal('success', 'Registration Successful!', 
-                `${userFormData.name} has been registered successfully.\nEmployee ID: ${userFormData.employee_id}`);
+            // Show success message
+            alert(`Registration successful!\n${name} has been registered.\nEmployee ID: ${employeeId}`);
             
-            // Reset after delay
-            setTimeout(() => {
-                resetRegistration();
-            }, 3000);
+            // Reset for next registration
+            clearCapturedImages();
+            document.getElementById('registration-form')?.reset();
+            
+            // Reset camera button
+            document.getElementById('start-user-camera').disabled = false;
+            document.getElementById('capture-btn').disabled = true;
+            
         } else {
-            progressContainer.classList.add('hidden');
-            msgDiv.className = 'message error';
-            msgDiv.textContent = data.message || 'Registration failed';
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-camera"></i> Capture & Register';
+            alert(data.message || 'Registration failed');
         }
-    } catch (error) {
-        progressContainer.classList.add('hidden');
-        msgDiv.className = 'message error';
-        msgDiv.textContent = 'Error connecting to server';
+        
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-camera"></i> Capture & Register';
+        btn.innerHTML = '<i class="fas fa-check"></i> Complete Registration';
+        
+    } catch (error) {
+        console.error('Registration error:', error);
+        alert('Error connecting to server');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Complete Registration';
     }
 }
 
@@ -280,15 +344,23 @@ function resetRegistration() {
     goToStep(2);
     
     // Reset step indicators (keep step 1 completed)
-    document.querySelector('[data-step="2"]').classList.remove('completed');
-    document.querySelector('[data-step="2"]').classList.add('active');
-    document.querySelector('[data-step="3"]').classList.remove('completed');
-    document.querySelector('[data-step="3"]').classList.remove('active');
+    document.querySelector('[data-step="2"]')?.classList.remove('completed');
+    document.querySelector('[data-step="2"]')?.classList.add('active');
+    document.querySelector('[data-step="3"]')?.classList.remove('completed');
+    document.querySelector('[data-step="3"]')?.classList.remove('active');
     
-    // Reset buttons
+    // Reset buttons and captured images
+    capturedImages = [];
+    const countSpan = document.getElementById('capture-count');
+    if (countSpan) countSpan.textContent = '0';
+    
+    const capturedContainer = document.getElementById('captured-images');
+    if (capturedContainer) capturedContainer.innerHTML = '';
+    
     document.getElementById('start-user-camera').disabled = false;
-    document.getElementById('capture-face-btn').disabled = true;
-    document.getElementById('capture-face-btn').innerHTML = '<i class="fas fa-camera"></i> Capture & Register';
+    document.getElementById('capture-btn').disabled = true;
+    document.getElementById('clear-btn').disabled = true;
+    document.getElementById('register-btn').disabled = true;
     
     // Hide progress
     document.getElementById('capture-progress')?.classList.add('hidden');

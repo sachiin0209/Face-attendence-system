@@ -12,6 +12,9 @@ supabase==2.3.0
 face-recognition==1.3.0
 # dlib==19.24.2  # Install from wheel: pip install dlib-19.22.99-cp310-cp310-win_amd64.whl
 
+# YOLO Face Detection (Fast)
+ultralytics==8.1.0
+
 # Image Processing
 opencv-python==4.9.0.80
 numpy==1.26.3
@@ -21,7 +24,7 @@ Pillow==10.2.0
 # Environment Variables
 python-dotenv==1.0.0
 
-# Development Tools
+# Production Server
 gunicorn==21.2.0
 
 # Note: dlib requires cmake to build

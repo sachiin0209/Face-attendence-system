@@ -148,7 +148,7 @@ def authenticate_admin():
         data = request.json
         admin_service = get_admin_auth_service()
         
-        if 'image' not in data:
+        if 'image' not in data or not data['image']:
             return jsonify({
                 "success": False,
                 "message": "No image provided"

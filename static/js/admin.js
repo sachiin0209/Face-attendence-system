@@ -63,9 +63,18 @@ async function authenticateAdmin() {
     msgDiv.textContent = '';
     
     try {
-        // Capture frame and spoof frames
+        // Capture frame and spoof frames (reduced for speed)
         const image = captureFrame('auth-video', 'auth-canvas');
-        const spoofFrames = await captureMultipleFrames('auth-video', 'auth-canvas', 10, 100);
+        
+        if (!image) {
+            msgDiv.className = 'auth-message error';
+            msgDiv.textContent = 'Failed to capture image. Please ensure camera is active.';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-fingerprint"></i> Authenticate';
+            return;
+        }
+        
+        const spoofFrames = await captureMultipleFrames('auth-video', 'auth-canvas', 5, 50);
         
         const response = await fetch('/api/admin/authenticate', {
             method: 'POST',
