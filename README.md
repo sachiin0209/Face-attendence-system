@@ -300,11 +300,74 @@ Access the application at: `http://localhost:5000`
 ### Attendance Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/attendance/punch-in` | Record punch-in |
-| POST | `/api/attendance/punch-out` | Record punch-out |
-| GET | `/api/attendance/list` | Get attendance records |
-| GET | `/api/attendance/stats` | Get statistics |
+| POST | `/api/attendance/mark` | Record punch-in/out (auto-detect) |
+| GET | `/api/attendance/today` | Get today's attendance |
+| GET | `/api/attendance/statistics` | Get statistics |
 | POST | `/api/attendance/report` | Generate report |
+
+## 🚀 Deployment
+
+### Deploy to Railway (Recommended)
+
+1. **Create Railway Account**: Go to [railway.app](https://railway.app)
+
+2. **Connect GitHub**: Link your GitHub repository
+
+3. **Add Environment Variables**: In Railway dashboard, add:
+   ```
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_KEY=your-supabase-anon-key
+   SECRET_KEY=your-super-secret-key
+   FLASK_DEBUG=False
+   FLASK_ENV=production
+   FACE_DETECTION_MODEL=hog
+   SPOOF_DETECTION_ENABLED=True
+   ```
+
+4. **Deploy**: Railway will auto-detect the Procfile and deploy
+
+### Deploy to Render
+
+1. **Create render.yaml**:
+   ```yaml
+   services:
+     - type: web
+       name: face-attendance
+       env: python
+       buildCommand: pip install -r requirements-deploy.txt
+       startCommand: gunicorn app:app
+   ```
+
+2. Connect your GitHub repo and deploy
+
+### Deploy to Heroku
+
+```bash
+# Login to Heroku
+heroku login
+
+# Create app
+heroku create your-app-name
+
+# Set environment variables
+heroku config:set SUPABASE_URL=https://your-project.supabase.co
+heroku config:set SUPABASE_KEY=your-key
+heroku config:set SECRET_KEY=your-secret-key
+heroku config:set FACE_DETECTION_MODEL=hog
+
+# Deploy
+git push heroku main
+```
+
+### Important Deployment Notes
+
+⚠️ **Use `requirements-deploy.txt`** for cloud deployment (Linux servers)
+- Uses `opencv-python-headless` instead of `opencv-python`
+- Builds `dlib` from source (takes ~10 min on first deploy)
+
+⚠️ **Set `FACE_DETECTION_MODEL=hog`** for cloud deployment
+- YOLO requires more memory
+- HOG works well on limited resources
 
 ## 🐛 Troubleshooting
 
